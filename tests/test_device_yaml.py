@@ -859,16 +859,18 @@ def test_is_valid_esphome_name_covers_allowed_name_chars() -> None:
 
 
 def test_load_device_from_storage_keeps_underscore_name(tmp_path: Path) -> None:
-    """An underscore ``esphome.name`` keys the device, not the filename stem."""
-    # Filename differs from the name so the stem fallback would shadow a
-    # wrongly-rejected name; the underscore name must still win.
-    yaml_file = tmp_path / "hf-display-renamed.yaml"
+    """An underscore ``esphome.name`` keys the device, not the friendly-name stem."""
+    # A device created from a friendly name lands in ``<slug>.yaml`` while the
+    # YAML carries an underscore ``name``; the real name must win over the stem
+    # so mDNS matches and the rename dialog pre-fills the actual hostname.
+    yaml_file = tmp_path / "my-esp-device.yaml"
     yaml_file.write_text(
-        "esphome:\n  name: hf_display\nesp32:\n  board: esp32dev\n",
+        "esphome:\n  name: my_esp-device_2\n  friendly_name: My ESP Device\n"
+        "esp32:\n  board: esp32dev\n",
         encoding="utf-8",
     )
     device = load_device_from_storage(yaml_file)
-    assert device.name == "hf_display"
+    assert device.name == "my_esp-device_2"
 
 
 # ----------------------------------------------------------------------
