@@ -1120,6 +1120,11 @@ class CleanedDocs:
     url: str | None = None
 
 
+def _canonical_docs_url(url: str) -> str:
+    """Rewrite a prerelease ``beta``/``next`` docs host to canonical esphome.io."""
+    return re.sub(r"https://(?:beta|next)\.esphome\.io/", "https://esphome.io/", url)
+
+
 def clean_docs(raw: str | None) -> CleanedDocs:
     """
     Strip type prefix and ``See also`` footer; surface both as fields.
@@ -1135,7 +1140,7 @@ def clean_docs(raw: str | None) -> CleanedDocs:
     m = _DOCS_SEE_ALSO.search(text)
     if m:
         name = m.group(1).strip()
-        url = m.group(2).strip()
+        url = _canonical_docs_url(m.group(2).strip())
         text = text[: m.start()].rstrip()
     text = _DOCS_TYPE_PREFIX.sub("", text).strip()
     # ESPHome's schema dump serializes a missing docstring as the literal
