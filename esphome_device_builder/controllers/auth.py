@@ -69,6 +69,9 @@ class AuthController:
             # ``test_auth_controller_token_path_skips_rate_limit`` for rationale.
             session = await self.session_store.validate(token)
             if session is None:
+                _LOGGER.info(
+                    "Rejected invalid or expired session token from %s", client.remote or "?"
+                )
                 raise AuthError(ErrorCode.NOT_AUTHENTICATED, "Invalid or expired token")
             client.set_authenticated(session.token)
             return {"token": session.token, "expires_at": session.expires_at}
@@ -76,6 +79,7 @@ class AuthController:
         ip = client.remote or "?"
         remaining = self.rate_limiter.remaining_lockout(ip)
         if remaining > 0:
+            _LOGGER.warning("Rejected rate-limited login attempt from %s", ip)
             raise AuthError(
                 ErrorCode.RATE_LIMITED,
                 f"Too many failed attempts; try again in {int(remaining) + 1}s",
@@ -83,6 +87,7 @@ class AuthController:
 
         if not self._db.settings.check_password(username, password):
             self.rate_limiter.record_failure(ip)
+            _LOGGER.warning("Failed login attempt from %s", ip)
             raise AuthError(ErrorCode.NOT_AUTHENTICATED, "Invalid credentials")
 
         self.rate_limiter.clear(ip)
@@ -98,6 +103,7 @@ class AuthController:
             return {"logged_out": True}
         if client.token:
             await self.session_store.revoke(client.token)
+        _LOGGER.info("Logged out WS client from %s", client.remote or "?")
         client.schedule_close()
         return {"logged_out": True}
 

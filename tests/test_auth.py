@@ -572,6 +572,41 @@ async def test_auth_controller_login_wrong_password(tmp_path: Path) -> None:
     assert client._authenticated is False
 
 
+async def test_auth_controller_logs_failed_login(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A wrong password leaves a warning naming the remote address."""
+    auth, _ = _make_controller(tmp_path)
+    client = _make_client(remote="10.0.0.7")
+
+    with (
+        caplog.at_level("WARNING", logger="esphome_device_builder.controllers.auth"),
+        pytest.raises(AuthError),
+    ):
+        await auth.login(client=client, username="admin", password="wrong")
+
+    assert any("Failed login attempt from 10.0.0.7" in rec.message for rec in caplog.records)
+
+
+async def test_auth_controller_logs_rate_limited_login(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A login refused by the rate limiter is logged as well."""
+    auth, _ = _make_controller(tmp_path)
+    auth.rate_limiter = RateLimiter(max_attempts=1, window_seconds=60, lockout_seconds=60)
+    client = _make_client(remote="10.0.0.8")
+    with pytest.raises(AuthError):
+        await auth.login(client=client, username="admin", password="wrong")
+
+    with (
+        caplog.at_level("WARNING", logger="esphome_device_builder.controllers.auth"),
+        pytest.raises(AuthError),
+    ):
+        await auth.login(client=client, username="admin", password="hunter2")
+
+    assert any("rate-limited login attempt from 10.0.0.8" in rec.message for rec in caplog.records)
+
+
 async def test_auth_controller_login_token_reuse(tmp_path: Path) -> None:
     """A token issued by one login can be replayed on a later login."""
     auth, _ = _make_controller(tmp_path)

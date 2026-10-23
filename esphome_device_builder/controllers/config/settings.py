@@ -67,6 +67,9 @@ _MAX_DESKTOP_VERSION_LEN = 64
 # treated as unset so `desktop_update_capable` stays false.
 _MAX_DESKTOP_BIN_LEN = 4096
 
+# OWASP's floor for a password that is the only authentication factor.
+MIN_PASSWORD_LENGTH = 15
+
 
 @dataclass
 class DashboardSettings:
@@ -171,6 +174,12 @@ class DashboardSettings:
         self.using_password = bool(resolved.username and resolved.password)
         if self.using_password:
             self.password_hash = hash_password(resolved.password)
+            if len(resolved.password) < MIN_PASSWORD_LENGTH:
+                _LOGGER.warning(
+                    "The dashboard password is shorter than %d characters; "
+                    "choose a longer one to resist guessing",
+                    MIN_PASSWORD_LENGTH,
+                )
         self.config_dir = Path(args.configuration)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.absolute_config_dir = self.config_dir.resolve()
