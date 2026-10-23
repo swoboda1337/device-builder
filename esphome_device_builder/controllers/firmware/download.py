@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aiohttp import web
+from esphome.core import CORE
 from esphome.storage_json import StorageJSON
 
 from ...definitions import (
@@ -24,9 +25,9 @@ from ...helpers.build_artifacts import resolve_elf_path
 from ...helpers.capability_tokens import CapabilityTokens
 from ...helpers.json import JSONDecodeError
 from ...helpers.json import loads as json_loads
-from ...helpers.paths import resolve_under_root
+from ...helpers.paths import PathEscapeError, resolve_under_root
 from ...helpers.sibling_cli import helper_cli_cmd
-from ...helpers.storage_path import resolve_storage_path
+from ...helpers.storage_path import resolve_data_dir, resolve_storage_path
 from ...models.boards import normalize_platform
 
 if TYPE_CHECKING:
@@ -247,8 +248,10 @@ def _resolve_artifact_path(configuration: str, file: str) -> tuple[Path, str]:
 
     Raises ``FileNotFoundError`` when the device isn't built or *file* is
     absent, and ``PathEscapeError`` (a ``ValueError``) when *file* escapes the
-    build directory. ``download_name`` is restricted to a filename-safe charset
-    so it can't inject into a ``Content-Disposition`` header.
+    build directory or the sidecar's ``firmware_bin_path`` lies outside the
+    data and config directories. ``download_name`` is restricted to a
+    filename-safe charset so it can't inject into a ``Content-Disposition``
+    header.
     """
     storage = StorageJSON.load(resolve_storage_path(configuration))
     if storage is None or storage.firmware_bin_path is None:
@@ -256,6 +259,9 @@ def _resolve_artifact_path(configuration: str, file: str) -> tuple[Path, str]:
         raise FileNotFoundError(msg)
 
     base_dir = storage.firmware_bin_path.parent.resolve()
+    allowed_roots = (resolve_data_dir(configuration), Path(CORE.config_dir))
+    if not any(base_dir.is_relative_to(root.resolve()) for root in allowed_roots):
+        raise PathEscapeError(f"{str(base_dir)!r} is outside the build and config directories")
     path = resolve_under_root(base_dir / file, base_dir)
 
     if not path.is_file():

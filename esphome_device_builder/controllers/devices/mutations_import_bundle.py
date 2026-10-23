@@ -156,7 +156,9 @@ def _stage_bundle(
         placements = [
             (rel, src)
             for src in sorted(staging.rglob("*"))
-            if src.is_file() and (rel := src.relative_to(staging).as_posix()) != MANIFEST_FILENAME
+            if src.is_file()
+            and (rel := src.relative_to(staging).as_posix()) != MANIFEST_FILENAME
+            and not _is_hidden_path(rel)
         ]
         conflicts = sorted(
             rel for rel, _ in placements if rel != SECRETS_FILENAME and (config_dir / rel).exists()
@@ -199,6 +201,11 @@ def _stage_bundle(
             esphome_version=manifest.esphome_version,
             main_existed=main_existed,
         )
+
+
+def _is_hidden_path(rel: str) -> bool:
+    """Report whether any component of the config-relative path *rel* starts with a dot."""
+    return any(part.startswith(".") for part in rel.split("/"))
 
 
 def _validate_raw_bundle(raw: bytes | bytearray) -> None:

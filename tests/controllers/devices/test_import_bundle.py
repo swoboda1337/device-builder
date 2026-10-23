@@ -89,6 +89,32 @@ async def test_import_bundle_token_mints_a_consumable_token(
 
 
 @pytest.mark.usefixtures("stub_create_device_metadata_helpers", "_bundle_storage_under_tmp")
+async def test_import_bundle_skips_hidden_paths(
+    tmp_path: Path, make_controller: MakeControllerFactory
+) -> None:
+    """Dot-directories such as ``.esphome/`` never land in the config dir."""
+    ctrl = make_controller(tmp_path, with_state_monitor=True)
+    sidecar = '{"storage_version": 1, "firmware_bin_path": "/etc/passwd"}'
+    bundle = _make_bundle(
+        {
+            "kitchen.yaml": MAIN_YAML,
+            ".esphome/storage/victim.yaml.json": sidecar,
+            ".git/config": "[core]\n",
+            "common/.hidden.yaml": "x: 1\n",
+        },
+        config_filename="kitchen.yaml",
+    )
+
+    result = await ctrl.import_bundle(bundle_bytes=bundle)
+
+    assert result.status == "imported"
+    assert result.written == ["kitchen.yaml"]
+    assert not (tmp_path / ".esphome" / "storage" / "victim.yaml.json").exists()
+    assert not (tmp_path / ".git").exists()
+    assert not (tmp_path / "common" / ".hidden.yaml").exists()
+
+
+@pytest.mark.usefixtures("stub_create_device_metadata_helpers", "_bundle_storage_under_tmp")
 async def test_import_bundle_lands_full_tree(
     tmp_path: Path, make_controller: MakeControllerFactory
 ) -> None:

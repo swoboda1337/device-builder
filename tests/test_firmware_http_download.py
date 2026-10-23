@@ -156,6 +156,28 @@ async def test_token_bound_to_traversal_file_is_404(
     assert resp.status == 404
 
 
+async def test_sidecar_pointing_outside_build_tree_is_404(
+    aiohttp_client: Any, tmp_path: Path, tmp_path_factory: Any, monkeypatch: Any
+) -> None:
+    """A sidecar whose firmware_bin_path names a foreign directory serves nothing from it."""
+    _seed_build(tmp_path, monkeypatch)
+    outside = tmp_path_factory.mktemp("outside")
+    (outside / "passwd").write_bytes(b"root:x:0:0")
+    write_storage_json(
+        tmp_path,
+        "kitchen.yaml",
+        firmware_bin_path=outside / "firmware.bin",
+        overrides={"esp_platform": "esp32"},
+    )
+    db = _StubDeviceBuilder()
+    token = db.firmware.download_tokens.create("kitchen.yaml", "passwd")
+    client = await aiohttp_client(_make_app(db))
+
+    resp = await client.get("/api/firmware/download", params={"token": token})
+
+    assert resp.status == 404
+
+
 async def test_unbuilt_device_is_404(aiohttp_client: Any, tmp_path: Path, monkeypatch: Any) -> None:
     monkeypatch.setattr(
         "esphome_device_builder.controllers.firmware.download.resolve_storage_path",
